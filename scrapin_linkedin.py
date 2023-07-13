@@ -151,6 +151,16 @@ for linkedin_URL in URLs_all_page:
     browser.back()
     sleep(random.randint(4, 7))
 
+    # about
+    div_about_element = profile_page.find('div', attrs={'id': 'about'})
+    if div_about_element:
+        section_about_element = div_about_element.find_parent('section')
+        about_span = section_about_element.find_all('span', attrs={'aria-hidden': 'true'})
+        about_span_text = about_span[1].text.strip()
+        data_one_profile.append(about_span_text)
+    else:
+        data_one_profile.append('')
+
     # formations
     try:
         see_all_education_button = browser.find_element(By.ID, 'navigation-index-see-all-education')
@@ -205,11 +215,43 @@ for linkedin_URL in URLs_all_page:
         data_one_profile.append(certifications_string)
     else:
         data_one_profile.append(' ')
+
+    #skills
+    sleep(random.randint(4, 7))
+    try:
+        div_skills = browser.find_element(By.ID, 'skills')
+        section_skills = div_skills.find_element(By.XPATH, './ancestor::section')
+        try:
+            button_see_all_skills = section_skills.find_element(By.CLASS_NAME, 'pvs-navigation__text')
+            button_see_all_skills.click()
+            sleep(random.randint(4, 7))
+            skills_page = BeautifulSoup(browser.page_source,"html.parser")
+            skills_list = skills_page.find_all('div', attrs={'class': 'pvs-entity'})
+        except:
+            print('Não há botão ver mais competências')
+            skills_list = section_skills.find_all('div', attrs={'class': 'pvs-entity'})
+    except:
+        print('Div skills não encontrada')
+        skills_list = []
+    skills = []
+    for skills_list_item in skills_list:
+        skill = skills_list_item.find('span', attrs={'aria-hidden': 'true'})
+        skill_text = skill.text.strip()
+        if skill_text not in skills:
+            skills.append(skill_text)
+    if (len(skills) > 0):
+        skills_string = "| ".join(skills)
+        data_one_profile.append(skills_string)
+    else:
+        data_one_profile.append(' ')
+
     list_data_profiles.append(data_one_profile)
     browser.execute_script('window.scrollTo(0, document.body.scrollHeight);') #scroll to the end of the page
 
 # 5 Write the data to a .xlsx file
-data_profiles = pd.DataFrame(list_data_profiles, columns=['Nome', 'Contato', 'Formação Acadêmica', 'Certificações'])
+data_profiles = pd.DataFrame(list_data_profiles, columns=[
+    'Nome', 'Contato', 'Sobre', 'Formação Acadêmica', 'Certificações', 'Competências'
+])
 
 data_profiles.to_excel('dados.xlsx', index=False)
 print("Arquivo xlsx criado com sucesso")
