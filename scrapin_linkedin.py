@@ -3,6 +3,7 @@ from selenium import webdriver
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
 from time import sleep
 import pandas as pd
@@ -32,33 +33,26 @@ sleep(random.randint(2, 5))
 print("Login realizado com sucesso")
 
 # 2 Search for the profile we want to crawl
-
-# 2.1 Locate the search bar element
-search_field = browser.find_element(By.CLASS_NAME, 'search-global-typeahead__input')
-
-# 2.2: Input the search query to the search bar
-search_field.send_keys('engenheiro civil')
-sleep(random.randint(2, 5))
-
-# 2.3: Search
-search_field.send_keys(Keys.RETURN)
-sleep(random.randint(4, 7))
-
-# 2.4 Search by profile
-profiles_button = browser.find_element(By.XPATH, '//ul/li[button[text()="Pessoas"]]')
-profiles_button.click()
+encoded_company = '%5B%224120%22%5D'
+encoded_locality = '%5B%22103658898%22%5D'
+browser.get(f'https://www.linkedin.com/search/results/people/?currentCompany={encoded_company}&geoUrn={encoded_locality}&keywords=engenheiro%20civil&sid=N4D')
 print("Busca por perfis rezalizada com sucesso")
 sleep(20)
 
-# 2.5 Search by company
-# company_button = browser.find_element(By.XPATH, '//button[text()="Empresa atual"]')
-# company_button.click()
-# sleep(10)
-# input_company = browser.find_element(By.CSS_SELECTOR, '[aria-label="Adicionar empresa"]')
-# input_company.send_keys('petrobras')
-# input_area = browser.find_element(By.CLASS_NAME, 'search-basic-typeahead')
-# print(input_area.get_attribute('outerHTML'))
+# # 2.1 Locate the search bar element
+# search_field = browser.find_element(By.CLASS_NAME, 'search-global-typeahead__input')
 
+# # 2.2: Input the search query to the search bar
+# search_field.send_keys('engenheiro civil')
+# sleep(random.randint(2, 5))
+
+# # 2.3: Search
+# search_field.send_keys(Keys.RETURN)
+# sleep(random.randint(4, 7))
+
+# 2.4 Search by profile
+# profiles_button = browser.find_element(By.XPATH, '//ul/li[button[text()="Pessoas"]]')
+# profiles_button.click()
 
 # 3 Scrape the URLs of the profiles
 
@@ -159,33 +153,76 @@ for linkedin_URL in URLs_all_page:
         about_span_text = about_span[1].text.strip()
         data_one_profile.append(about_span_text)
     else:
-        data_one_profile.append('')
+        data_one_profile.append(' ')
+
+    # experiences
+    experiences = []
+    div_experience = profile_page.find('div', attrs={'id': 'experience'})
+    if div_experience:
+        section_experience = div_experience.find_parent('section')
+        experience_list = section_experience.find_all('div', attrs={'class': 'pvs-list__item--no-padding-in-columns'})
+        if experience_list:
+            print(len(experience_list))
+            for experience_list_item in experience_list:
+                div_title = experience_list_item.find('div', class_='display-flex flex-wrap align-items-center full-height')
+                title = div_title.find('span', attrs={'aria-hidden': 'true'}).text
+                print("Experiências de uma empresa:")
+                print(title)
+                has_more_one_office = experience_list_item.find_all('span', attrs={'class': 'pvs-entity__path-node'})
+                if has_more_one_office:
+                    print("Tem mais de um cargo")
+                    offices = []
+                    for one_office in has_more_one_office:
+                        div_sibling = one_office.find_next_sibling('div')
+                        office = div_sibling.find('span', attrs={'aria-hidden': 'true'})
+                        offices.append(office.text)
+                    all_offices = ", ".join(offices)
+                    experiences.append(f'{title} - {all_offices}')
+                else:
+                    try:
+                        secondary_title_span = experience_list_item.find('span', attrs={'class': 't-14 t-normal'})
+                        secondary_title = secondary_title_span.find('span', attrs={'aria-hidden': 'true'}).text
+                        experiences.append(f'{title} - {secondary_title}')
+                        print(secondary_title)
+                    except AttributeError:
+                        continue
+            experience_string = "| ".join(experiences)
+            data_one_profile.append(experience_string)
+    else:
+        print("Experiência não encontrada")
+        data_one_profile.append(' ')
 
     # formations
     try:
+        formations_list = []
         see_all_education_button = browser.find_element(By.ID, 'navigation-index-see-all-education')
         print('Botão de ver todas a formações encontrado')
         see_all_education_button.click()
         sleep(random.randint(4, 7))
         education_page = BeautifulSoup(browser.page_source,"html.parser")
         formations_list = education_page.find_all('div', attrs={'class': 'pvs-entity'})
+        formations_list = section_education.find_all('div', attrs={'class': 'pvs-entity'})
         browser.back()
     except NoSuchElementException:
         print('Botão de ver todas a formações não encontrado')
         div_education = profile_page.find('div', {'id': 'education'})
-        section_education = div_education.find_parent('section')
-        formations_list = section_education.find_all('div', attrs={'class': 'pvs-entity'})
+        if div_education:
+            section_education = div_education.find_parent('section')
+            formations_list = section_education.find_all('div', attrs={'class': 'pvs-entity'})
     formations = []
-    for formation_list_item in formations_list:
-        institution = formation_list_item.find('span', attrs={'aria-hidden': 'true'})
-        level_span = formation_list_item.find('span', attrs={'class': 't-14 t-normal'})
-        if (level_span is not None):
-            level = level_span.find('span', attrs={'aria-hidden': 'true'})
-            formations.append(institution.text + ' ' + '-' + ' ' + level.text)
-        else:
-            formations.append(institution.text)
-    formations_string = "| ".join(formations)
-    data_one_profile.append(formations_string)
+    if len(formations_list) > 0:
+        for formation_list_item in formations_list:
+            institution = formation_list_item.find('span', attrs={'aria-hidden': 'true'})
+            level_span = formation_list_item.find('span', attrs={'class': 't-14 t-normal'})
+            if (level_span is not None):
+                level = level_span.find('span', attrs={'aria-hidden': 'true'})
+                formations.append(institution.text + ' ' + '-' + ' ' + level.text)
+            else:
+                formations.append(institution.text)
+        formations_string = "| ".join(formations)
+        data_one_profile.append(formations_string)
+    else:
+        data_one_profile.append(' ')
 
     # certifications
     try:
@@ -250,7 +287,7 @@ for linkedin_URL in URLs_all_page:
 
 # 5 Write the data to a .xlsx file
 data_profiles = pd.DataFrame(list_data_profiles, columns=[
-    'Nome', 'Contato', 'Sobre', 'Formação Acadêmica', 'Certificações', 'Competências'
+    'Nome', 'Contato', 'Sobre', 'Experiência', 'Formação Acadêmica', 'Certificações', 'Competências'
 ])
 
 data_profiles.to_excel('dados.xlsx', index=False)
