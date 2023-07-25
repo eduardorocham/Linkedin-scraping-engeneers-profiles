@@ -3,13 +3,15 @@ from selenium import webdriver
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.chrome.options import Options
 from time import sleep
 import pandas as pd
 
 # 1 Open Chrome and Access Linkedin login site
-browser = webdriver.Chrome()
+options = Options()
+options.add_argument('--headless')
+browser = webdriver.Chrome(options=options)
 browser.get('https://www.linkedin.com/login')
 print("Navegador inicializado")
 sleep(random.randint(2, 5))
@@ -33,11 +35,11 @@ sleep(random.randint(2, 5))
 print("Login realizado com sucesso")
 
 # 2 Search for the profile we want to crawl
-encoded_company = '%5B%224120%22%5D'
-encoded_locality = '%5B%22103658898%22%5D'
-browser.get(f'https://www.linkedin.com/search/results/people/?currentCompany={encoded_company}&geoUrn={encoded_locality}&keywords=engenheiro%20civil&sid=N4D')
-print("Busca por perfis rezalizada com sucesso")
-sleep(20)
+# encoded_company = '%5B%224120%22%5D'
+# encoded_locality = '%5B"104679607"%5D'
+# browser.get(f'https://www.linkedin.com/search/results/people/?geoUrn={encoded_locality}&keywords=engenheiro%20civil&sid=N4D')
+# print("Busca por perfis rezalizada com sucesso")
+# sleep(20)
 
 # # 2.1 Locate the search bar element
 # search_field = browser.find_element(By.CLASS_NAME, 'search-global-typeahead__input')
@@ -77,7 +79,10 @@ def GetUrl():
     return all_profile_URL
 
 # 3.2 Navigate through many page, and extract the profile URLs of each page
-number_of_pages = 1
+number_of_pages = 15
+initial_page = 1
+browser.get(f'https://www.linkedin.com/search/results/people/?geoUrn=%5B%22103485959%22%5D&keywords=engenheiro%20civil&origin=FACETED_SEARCH&page={initial_page}&sid=Dja')
+sleep(20)
 URLs_all_page = []
 for page in range(number_of_pages):
     URLs_one_page = GetUrl()
@@ -165,9 +170,11 @@ for linkedin_URL in URLs_all_page:
             print(len(experience_list))
             for experience_list_item in experience_list:
                 div_title = experience_list_item.find('div', class_='display-flex flex-wrap align-items-center full-height')
-                title = div_title.find('span', attrs={'aria-hidden': 'true'}).text
+                title = div_title.find('span', attrs={'aria-hidden': 'true'})
+                if title is None:
+                    continue
                 print("Experiências de uma empresa:")
-                print(title)
+                print(title.text)
                 has_more_one_office = experience_list_item.find_all('span', attrs={'class': 'pvs-entity__path-node'})
                 if has_more_one_office:
                     print("Tem mais de um cargo")
@@ -177,12 +184,12 @@ for linkedin_URL in URLs_all_page:
                         office = div_sibling.find('span', attrs={'aria-hidden': 'true'})
                         offices.append(office.text)
                     all_offices = ", ".join(offices)
-                    experiences.append(f'{title} - {all_offices}')
+                    experiences.append(f'{title.text} - {all_offices}')
                 else:
                     try:
                         secondary_title_span = experience_list_item.find('span', attrs={'class': 't-14 t-normal'})
                         secondary_title = secondary_title_span.find('span', attrs={'aria-hidden': 'true'}).text
-                        experiences.append(f'{title} - {secondary_title}')
+                        experiences.append(f'{title.text} - {secondary_title}')
                         print(secondary_title)
                     except AttributeError:
                         continue
@@ -202,17 +209,6 @@ for linkedin_URL in URLs_all_page:
         education_page = BeautifulSoup(browser.page_source,"html.parser")
         formations_list = education_page.find_all('div', attrs={'class': 'pvs-entity'})
         formations_list = section_education.find_all('div', attrs={'class': 'pvs-entity'})
-        # formations = []
-        # for formation_list_item in formations_list:
-        #     institution = formation_list_item.find('span', attrs={'aria-hidden': 'true'})
-        #     level_span = formation_list_item.find('span', attrs={'class': 't-14 t-normal'})
-        #     if (level_span is not None):
-        #         level = level_span.find('span', attrs={'aria-hidden': 'true'})
-        #         formations.append(institution.text + ' ' + '-' + ' ' + level.text)
-        #     else:
-        #         formations.append(institution.text)
-        # formations_string = "| ".join(formations)
-        # data_one_profile.append(formations_string)
         browser.back()
     except NoSuchElementException:
         print('Botão de ver todas a formações não encontrado')
@@ -256,7 +252,11 @@ for linkedin_URL in URLs_all_page:
     for certification_list_item in certifications_list:
         certification_name = certification_list_item.find('span', attrs={'aria-hidden': 'true'})
         entity_span = certification_list_item.find('span', attrs={'class': 't-14 t-normal'})
+        if entity_span is None:
+            continue
         entity = entity_span.find('span', attrs={'aria-hidden': 'true'})
+        if entity is None:
+            continue
         certifications.append(certification_name.text + ' ' + '-' + ' ' + entity.text)
     if (len(certifications) > 0):
         certifications_string = "| ".join(certifications)
